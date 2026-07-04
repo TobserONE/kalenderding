@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mein Tracker">
+<meta name="theme-color" content="#f2f2f7">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>Mein Tracker</title>
+<style>
+:root {
+  --bg: #f2f2f7;
+  --card: #ffffff;
+  --text: #1c1c1e;
+  --text2: #8e8e93;
+  --line: #e5e5ea;
+  --accent: #007aff;
+  --green: #34c759;
+  --yellow: #ffcc00;
+  --red: #ff3b30;
+  --tint-up: #ffe3e0;
+  --tint-down: #dcf5e3;
+  --tint-same: #e0efff;
+  --period: #ff2d55;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --card: #1c1c1e;
+    --text: #ffffff;
+    --text2: #8e8e93;
+    --line: #2c2c2e;
+    --tint-up: #4a2320;
+    --tint-down: #1e3a28;
+    --tint-same: #1d3350;
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  padding-top: env(safe-area-inset-top);
+  overscroll-behavior: none;
+}
+.view { display: none; padding: 12px 12px 90px; max-width: 560px; margin: 0 auto; }
+.view.active { display: block; }
+h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
+
+/* ---------- Kalender ---------- */
+.month-nav {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 2px 12px;
+}
+.month-nav .title { font-size: 1.2rem; font-weight: 700; }
+.month-nav button {
+  border: none; background: var(--card); color: var(--accent);
+  font-size: 1.1rem; font-weight: 600; border-radius: 10px;
+  padding: 6px 14px; cursor: pointer;
+}
+.weekdays {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+  text-align: center; font-size: 0.7rem; color: var(--text2);
+  font-weight: 600; margin-bottom: 4px;
+}
+.grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.tile {
+  background: var(--card); border-radius: 10px; min-height: 62px;
+  padding: 4px 2px 3px; display: flex; flex-direction: column; align-items: center;
+  gap: 2px; cursor: pointer; border: 2px solid transparent;
+  font-size: 0.72rem; position: relative; user-select: none; -webkit-user-select: none;
+}
+.tile.empty { background: transparent; cursor: default; }
+.tile.today { border-color: var(--accent); }
+.tile.up { background: var(--tint-up); }
+.tile.down { background: var(--tint-down); }
+.tile.same { background: var(--tint-same); }
+.tile .day { font-weight: 700; font-size: 0.78rem; }
+.tile .dot { width: 10px; height: 10px; border-radius: 50%; }
+.tile .dot.none { background: transparent; }
+.tile .w { font-size: 0.66rem; font-weight: 600; white-space: nowrap; }
+.tile .w .arrow { font-size: 0.55rem; }
+.tile .p-flag {
+  position: absolute; top: 2px; right: 3px; font-size: 0.6rem;
+}
+.legend {
+  display: flex; flex-wrap: wrap; gap: 10px; padding: 14px 4px 0;
+  font-size: 0.72rem; color: var(--text2);
+}
+.legend span { display: flex; align-items: center; gap: 4px; }
+.legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.legend i.sq { border-radius: 3px; }
+
+/* ---------- Bottom-Sheet (Tageseingabe) ---------- */
+.overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+  display: none; z-index: 40;
+}
+.overlay.open { display: block; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  background: var(--card); border-radius: 18px 18px 0 0;
+  padding: 18px 18px calc(20px + env(safe-area-inset-bottom));
+  transform: translateY(105%); transition: transform 0.25s ease;
+  max-width: 560px; margin: 0 auto;
+}
+.sheet.open { transform: translateY(0); }
+.sheet h2 { font-size: 1.1rem; margin-bottom: 14px; }
+.field { margin-bottom: 16px; }
+.field label { display: block; font-size: 0.78rem; color: var(--text2); font-weight: 600; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.03em; }
+.weight-row { display: flex; align-items: center; gap: 8px; }
+.weight-row input {
+  flex: 1; font-size: 1.3rem; padding: 10px 12px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--text);
+  width: 100%; outline: none;
+}
+.weight-row .unit { font-size: 1rem; color: var(--text2); }
+.ampel { display: flex; gap: 8px; }
+.ampel button {
+  flex: 1; padding: 12px 0; border-radius: 12px; border: 2px solid var(--line);
+  background: var(--bg); font-size: 1.2rem; cursor: pointer; color: var(--text);
+}
+.ampel button.sel-green { border-color: var(--green); background: var(--tint-down); }
+.ampel button.sel-yellow { border-color: var(--yellow); background: #fff8d6; }
+.ampel button.sel-red { border-color: var(--red); background: var(--tint-up); }
+@media (prefers-color-scheme: dark) {
+  .ampel button.sel-yellow { background: #40390f; }
+}
+.toggle-row { display: flex; align-items: center; justify-content: space-between; background: var(--bg); border-radius: 12px; padding: 12px 14px; }
+.toggle-row .lbl { font-size: 1rem; }
+.switch { position: relative; width: 51px; height: 31px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+  position: absolute; inset: 0; background: var(--line); border-radius: 31px;
+  transition: 0.2s; cursor: pointer;
+}
+.slider:before {
+  content: ""; position: absolute; height: 27px; width: 27px; left: 2px; top: 2px;
+  background: #fff; border-radius: 50%; transition: 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.switch input:checked + .slider { background: var(--period); }
+.switch input:checked + .slider:before { transform: translateX(20px); }
+.sheet-btns { display: flex; gap: 10px; margin-top: 6px; }
+.sheet-btns button {
+  flex: 1; padding: 13px 0; border-radius: 12px; border: none;
+  font-size: 1rem; font-weight: 600; cursor: pointer;
+}
+.btn-save { background: var(--accent); color: #fff; }
+.btn-del { background: var(--bg); color: var(--red); }
+
+/* ---------- Diagramme ---------- */
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.stat {
+  background: var(--card); border-radius: 14px; padding: 12px 8px; text-align: center;
+}
+.stat .v { font-size: 1.15rem; font-weight: 700; }
+.stat .l { font-size: 0.65rem; color: var(--text2); margin-top: 3px; }
+.card {
+  background: var(--card); border-radius: 14px; padding: 14px; margin-bottom: 14px;
+}
+.card h3 { font-size: 0.95rem; margin-bottom: 4px; }
+.card .sub { font-size: 0.72rem; color: var(--text2); margin-bottom: 10px; }
+.card svg { width: 100%; height: auto; display: block; }
+.range-btns { display: flex; gap: 6px; margin-bottom: 10px; }
+.range-btns button {
+  border: none; background: var(--bg); color: var(--text2); border-radius: 8px;
+  padding: 5px 12px; font-size: 0.78rem; font-weight: 600; cursor: pointer;
+}
+.range-btns button.on { background: var(--accent); color: #fff; }
+.empty-hint { color: var(--text2); font-size: 0.82rem; padding: 20px 0; text-align: center; }
+
+/* ---------- Mehr ---------- */
+.menu-btn {
+  display: block; width: 100%; background: var(--card); border: none;
+  border-radius: 14px; padding: 15px; font-size: 1rem; color: var(--accent);
+  cursor: pointer; margin-bottom: 10px; text-align: left; font-weight: 500;
+}
+.menu-btn.danger { color: var(--red); }
+.hint { font-size: 0.75rem; color: var(--text2); padding: 4px 6px 14px; line-height: 1.4; }
+.period-form { background: var(--card); border-radius: 14px; padding: 14px; margin-bottom: 10px; }
+.period-form h3 { font-size: 0.95rem; margin-bottom: 10px; }
+.period-form .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.period-form label { font-size: 0.85rem; width: 40px; color: var(--text2); }
+.period-form input {
+  flex: 1; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--text); font-size: 0.95rem; font-family: inherit;
+}
+.period-form button {
+  width: 100%; padding: 11px 0; border-radius: 10px; border: none;
+  background: var(--period); color: #fff; font-size: 0.95rem; font-weight: 600; cursor: pointer;
+}
+
+/* ---------- Tab-Bar ---------- */
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  display: flex; background: var(--card);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tabbar button {
+  flex: 1; border: none; background: none; padding: 8px 0 6px;
+  font-size: 0.65rem; color: var(--text2); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.tabbar button .ico { font-size: 1.35rem; line-height: 1; }
+.tabbar button.on { color: var(--accent); }
+.toast {
+  position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+  background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 20px;
+  font-size: 0.85rem; z-index: 60; opacity: 0; transition: opacity 0.3s; pointer-events: none;
+}
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- ===== Kalender ===== -->
+<div class="view active" id="view-cal">
+  <div class="month-nav">
+    <button id="btn-prev">‹</button>
+    <span class="title" id="month-title"></span>
+    <button id="btn-next">›</button>
+  </div>
+  <div class="weekdays">
+    <span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span>
+  </div>
+  <div class="grid" id="cal-grid"></div>
+  <div class="legend">
+    <span><i style="background:var(--green)"></i> Aktivität hoch</span>
+    <span><i style="background:var(--yellow)"></i> mittel</span>
+    <span><i style="background:var(--red)"></i> keine</span>
+    <span>🩸 Periode</span>
+  </div>
+  <div class="legend">
+    <span><i class="sq" style="background:var(--tint-up)"></i> Gewicht ↑</span>
+    <span><i class="sq" style="background:var(--tint-down)"></i> Gewicht ↓</span>
+    <span><i class="sq" style="background:var(--tint-same)"></i> gleich</span>
+  </div>
+</div>
+
+<!-- ===== Diagramme ===== -->
+<div class="view" id="view-charts">
+  <h1>Diagramme</h1>
+  <div class="stats">
+    <div class="stat"><div class="v" id="st-weight">–</div><div class="l">Aktuelles Gewicht</div></div>
+    <div class="stat"><div class="v" id="st-delta">–</div><div class="l">Δ 7 Tage</div></div>
+    <div class="stat"><div class="v" id="st-cycle">–</div><div class="l">Ø Zyklus</div></div>
+  </div>
+
+  <div class="card">
+    <h3>Gewichtsverlauf</h3>
+    <div class="sub">Rosa Balken = Periodentage</div>
+    <div class="range-btns" id="w-range">
+      <button data-d="30" class="on">30 Tage</button>
+      <button data-d="90">90 Tage</button>
+      <button data-d="365">1 Jahr</button>
+    </div>
+    <div id="chart-weight"></div>
+  </div>
+
+  <div class="card">
+    <h3>Aktivität pro Monat</h3>
+    <div class="sub">Anzahl Tage je Ampelfarbe, letzte 6 Monate</div>
+    <div id="chart-activity"></div>
+  </div>
+
+  <div class="card">
+    <h3>Zykluslänge</h3>
+    <div class="sub" id="cycle-sub">Abstand zwischen den Periodenstarts</div>
+    <div id="chart-cycle"></div>
+  </div>
+</div>
+
+<!-- ===== Mehr ===== -->
+<div class="view" id="view-more">
+  <h1>Mehr</h1>
+  <div class="period-form">
+    <h3>🩸 Periode als Zeitraum eintragen</h3>
+    <div class="row"><label>Von</label><input type="date" id="p-start"></div>
+    <div class="row"><label>Bis</label><input type="date" id="p-end"></div>
+    <button id="btn-period-range">Zeitraum speichern</button>
+  </div>
+  <button class="menu-btn" id="btn-export">📤 Daten exportieren (Backup)</button>
+  <button class="menu-btn" id="btn-import">📥 Daten importieren</button>
+  <input type="file" id="import-file" accept=".json" style="display:none">
+  <button class="menu-btn danger" id="btn-wipe">🗑️ Alle Daten löschen</button>
+  <p class="hint">Alle Daten werden nur lokal auf diesem Gerät gespeichert. Tipp: Öffne die Seite in Safari und wähle „Teilen → Zum Home-Bildschirm", um die App wie eine normale App zu nutzen. Erstelle regelmäßig ein Backup per Export.</p>
+</div>
+
+<!-- ===== Tageseingabe ===== -->
+<div class="overlay" id="overlay"></div>
+<div class="sheet" id="sheet">
+  <h2 id="sheet-title"></h2>
+  <div class="field">
+    <label>Gewicht</label>
+    <div class="weight-row">
+      <input type="text" inputmode="decimal" id="in-weight" placeholder="z. B. 68,5">
+      <span class="unit">kg</span>
+    </div>
+  </div>
+  <div class="field">
+    <label>Sportliche Aktivität</label>
+    <div class="ampel">
+      <button id="a-green" title="hoch">🟢</button>
+      <button id="a-yellow" title="mittel">🟡</button>
+      <button id="a-red" title="keine">🔴</button>
+    </div>
+  </div>
+  <div class="field">
+    <div class="toggle-row">
+      <span class="lbl">🩸 Periode an diesem Tag</span>
+      <label class="switch"><input type="checkbox" id="in-period"><span class="slider"></span></label>
+    </div>
+  </div>
+  <div class="sheet-btns">
+    <button class="btn-del" id="btn-clear">Eintrag löschen</button>
+    <button class="btn-save" id="btn-save">Speichern</button>
+  </div>
+</div>
+
+<!-- ===== Tab-Bar ===== -->
+<div class="tabbar">
+  <button data-view="view-cal" class="on"><span class="ico">📅</span>Kalender</button>
+  <button data-view="view-charts"><span class="ico">📈</span>Diagramme</button>
+  <button data-view="view-more"><span class="ico">⚙️</span>Mehr</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+// ===================== Daten =====================
+const STORE_KEY = "trackerData";
+let data = {};
+try { data = JSON.parse(localStorage.getItem(STORE_KEY) || "{}"); } catch (e) { data = {}; }
+
+function saveData() { localStorage.setItem(STORE_KEY, JSON.stringify(data)); }
+
+function keyOf(d) {
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+function dateOf(key) {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+function fmtDE(key) {
+  const d = dateOf(key);
+  return d.toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "long", year: "numeric" });
+}
+function fmtW(w) { return w.toFixed(1).replace(".", ","); }
+
+// Letztes eingetragenes Gewicht vor dem angegebenen Tag (max. 60 Tage zurück)
+function prevWeight(key) {
+  const d = dateOf(key);
+  for (let i = 1; i <= 60; i++) {
+    d.setDate(d.getDate() - 1);
+    const e = data[keyOf(d)];
+    if (e && typeof e.w === "number") return e.w;
+  }
+  return null;
+}
+
+// ===================== Kalender =====================
+const MONTHS = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+let calYear, calMonth;
+{
+  const now = new Date();
+  calYear = now.getFullYear();
+  calMonth = now.getMonth();
+}
+
+function renderCalendar() {
+  document.getElementById("month-title").textContent = MONTHS[calMonth] + " " + calYear;
+  const grid = document.getElementById("cal-grid");
+  grid.innerHTML = "";
+  const first = new Date(calYear, calMonth, 1);
+  const offset = (first.getDay() + 6) % 7; // Montag = 0
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const todayKey = keyOf(new Date());
+
+  for (let i = 0; i < offset; i++) {
+    const t = document.createElement("div");
+    t.className = "tile empty";
+    grid.appendChild(t);
+  }
+  for (let day = 1; day <= daysInMonth; day++) {
+    const key = keyOf(new Date(calYear, calMonth, day));
+    const e = data[key] || {};
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    if (key === todayKey) tile.classList.add("today");
+
+    let arrow = "";
+    if (typeof e.w === "number") {
+      const pw = prevWeight(key);
+      if (pw !== null) {
+        const diff = Math.round((e.w - pw) * 10) / 10;
+        if (diff > 0) { tile.classList.add("up"); arrow = "▲"; }
+        else if (diff < 0) { tile.classList.add("down"); arrow = "▼"; }
+        else { tile.classList.add("same"); arrow = "="; }
+      }
+    }
+
+    let html = '<span class="day">' + day + "</span>";
+    const dotColor = e.a === "green" ? "var(--green)" : e.a === "yellow" ? "var(--yellow)" : e.a === "red" ? "var(--red)" : null;
+    html += dotColor ? '<span class="dot" style="background:' + dotColor + '"></span>' : '<span class="dot none"></span>';
+    if (typeof e.w === "number") {
+      html += '<span class="w">' + fmtW(e.w) + (arrow ? ' <span class="arrow">' + arrow + "</span>" : "") + "</span>";
+    }
+    if (e.p) html += '<span class="p-flag">🩸</span>';
+    tile.innerHTML = html;
+    tile.addEventListener("click", () => openSheet(key));
+    grid.appendChild(tile);
+  }
+}
+
+document.getElementById("btn-prev").addEventListener("click", () => {
+  calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; }
+  renderCalendar();
+});
+document.getElementById("btn-next").addEventListener("click", () => {
+  calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; }
+  renderCalendar();
+});
+
+// ===================== Tageseingabe =====================
+let sheetKey = null;
+let selAct = null;
+
+function openSheet(key) {
+  sheetKey = key;
+  const e = data[key] || {};
+  document.getElementById("sheet-title").textContent = fmtDE(key);
+  document.getElementById("in-weight").value = typeof e.w === "number" ? fmtW(e.w) : "";
+  document.getElementById("in-period").checked = !!e.p;
+  setActDirect(e.a || null);
+  document.getElementById("overlay").classList.add("open");
+  document.getElementById("sheet").classList.add("open");
+}
+function closeSheet() {
+  document.getElementById("overlay").classList.remove("open");
+  document.getElementById("sheet").classList.remove("open");
+}
+// erneutes Tippen auf die gewählte Farbe hebt die Auswahl auf
+function setAct(a) {
+  setActDirect(selAct === a ? null : a);
+}
+function setActDirect(a) {
+  selAct = a;
+  document.getElementById("a-green").className = selAct === "green" ? "sel-green" : "";
+  document.getElementById("a-yellow").className = selAct === "yellow" ? "sel-yellow" : "";
+  document.getElementById("a-red").className = selAct === "red" ? "sel-red" : "";
+}
+
+document.getElementById("a-green").addEventListener("click", () => setAct("green"));
+document.getElementById("a-yellow").addEventListener("click", () => setAct("yellow"));
+document.getElementById("a-red").addEventListener("click", () => setAct("red"));
+document.getElementById("overlay").addEventListener("click", closeSheet);
+
+document.getElementById("btn-save").addEventListener("click", () => {
+  const raw = document.getElementById("in-weight").value.trim().replace(",", ".");
+  const e = {};
+  if (raw !== "") {
+    const w = parseFloat(raw);
+    if (isNaN(w) || w <= 0 || w > 400) { showToast("Bitte gültiges Gewicht eingeben"); return; }
+    e.w = Math.round(w * 10) / 10;
+  }
+  if (selAct) e.a = selAct;
+  if (document.getElementById("in-period").checked) e.p = true;
+  if (Object.keys(e).length === 0) delete data[sheetKey];
+  else data[sheetKey] = e;
+  saveData();
+  closeSheet();
+  renderCalendar();
+  showToast("Gespeichert ✓");
+});
+
+document.getElementById("btn-clear").addEventListener("click", () => {
+  delete data[sheetKey];
+  saveData();
+  closeSheet();
+  renderCalendar();
+  showToast("Eintrag gelöscht");
+});
+
+// ===================== Periode als Zeitraum =====================
+document.getElementById("btn-period-range").addEventListener("click", () => {
+  const s = document.getElementById("p-start").value;
+  const e = document.getElementById("p-end").value;
+  if (!s || !e) { showToast("Bitte Start und Ende wählen"); return; }
+  if (e < s) { showToast("Ende liegt vor dem Start"); return; }
+  const d = dateOf(s), end = dateOf(e);
+  let n = 0;
+  while (d <= end && n < 40) {
+    const k = keyOf(d);
+    data[k] = data[k] || {};
+    data[k].p = true;
+    d.setDate(d.getDate() + 1);
+    n++;
+  }
+  saveData();
+  renderCalendar();
+  showToast("Periode eingetragen (" + n + " Tage)");
+  document.getElementById("p-start").value = "";
+  document.getElementById("p-end").value = "";
+});
+
+// ===================== Diagramme =====================
+let weightRange = 30;
+document.getElementById("w-range").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button");
+  if (!b) return;
+  weightRange = Number(b.dataset.d);
+  document.querySelectorAll("#w-range button").forEach(x => x.classList.toggle("on", x === b));
+  renderWeightChart();
+});
+
+function svgOpen(w, h) {
+  return '<svg viewBox="0 0 ' + w + ' ' + h + '" xmlns="http://www.w3.org/2000/svg">';
+}
+function axisColor() { return "var(--text2)"; }
+
+function renderWeightChart() {
+  const el = document.getElementById("chart-weight");
+  const W = 360, H = 200, padL = 34, padR = 8, padT = 10, padB = 22;
+  const end = new Date(); end.setHours(0,0,0,0);
+  const start = new Date(end); start.setDate(start.getDate() - (weightRange - 1));
+
+  const pts = [];
+  const periodDays = [];
+  const d = new Date(start);
+  for (let i = 0; i < weightRange; i++) {
+    const e = data[keyOf(d)];
+    if (e && typeof e.w === "number") pts.push({ i, w: e.w, key: keyOf(d) });
+    if (e && e.p) periodDays.push(i);
+    d.setDate(d.getDate() + 1);
+  }
+  if (pts.length < 2) {
+    el.innerHTML = '<div class="empty-hint">Noch zu wenige Gewichtsdaten in diesem Zeitraum.</div>';
+    return;
+  }
+  let min = Math.min(...pts.map(p => p.w)), max = Math.max(...pts.map(p => p.w));
+  if (max - min < 1) { min -= 0.5; max += 0.5; }
+  const pad = (max - min) * 0.1;
+  min -= pad; max += pad;
+
+  const X = i => padL + (i / (weightRange - 1)) * (W - padL - padR);
+  const Y = w => padT + (1 - (w - min) / (max - min)) * (H - padT - padB);
+
+  let s = svgOpen(W, H);
+  // Periodentage als Hintergrundbalken
+  const bw = (W - padL - padR) / (weightRange - 1);
+  periodDays.forEach(i => {
+    s += '<rect x="' + (X(i) - bw / 2) + '" y="' + padT + '" width="' + bw + '" height="' + (H - padT - padB) + '" fill="var(--period)" opacity="0.15"/>';
+  });
+  // Gitterlinien + Y-Beschriftung
+  for (let g = 0; g <= 3; g++) {
+    const v = min + (g / 3) * (max - min);
+    const y = Y(v);
+    s += '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="var(--line)" stroke-width="1"/>';
+    s += '<text x="' + (padL - 4) + '" y="' + (y + 3) + '" font-size="9" fill="' + axisColor() + '" text-anchor="end">' + v.toFixed(1).replace(".", ",") + "</text>";
+  }
+  // X-Beschriftung: Start, Mitte, Ende
+  [0, Math.floor((weightRange - 1) / 2), weightRange - 1].forEach(i => {
+    const dd = new Date(start); dd.setDate(dd.getDate() + i);
+    const lbl = dd.getDate() + "." + (dd.getMonth() + 1) + ".";
+    s += '<text x="' + X(i) + '" y="' + (H - 6) + '" font-size="9" fill="' + axisColor() + '" text-anchor="middle">' + lbl + "</text>";
+  });
+  // Linie
+  const path = pts.map((p, idx) => (idx === 0 ? "M" : "L") + X(p.i).toFixed(1) + " " + Y(p.w).toFixed(1)).join(" ");
+  s += '<path d="' + path + '" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+  // Punkte (bei langen Zeiträumen ausblenden)
+  if (weightRange <= 90) {
+    pts.forEach(p => {
+      s += '<circle cx="' + X(p.i) + '" cy="' + Y(p.w) + '" r="2.6" fill="var(--accent)"/>';
+    });
+  }
+  s += "</svg>";
+  el.innerHTML = s;
+}
+
+function renderActivityChart() {
+  const el = document.getElementById("chart-activity");
+  const W = 360, H = 180, padL = 26, padB = 22, padT = 10;
+  const now = new Date();
+  const months = [];
+  for (let m = 5; m >= 0; m--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - m, 1);
+    months.push({ y: d.getFullYear(), m: d.getMonth(), g: 0, ge: 0, r: 0 });
+  }
+  Object.entries(data).forEach(([k, e]) => {
+    if (!e.a) return;
+    const d = dateOf(k);
+    const mo = months.find(x => x.y === d.getFullYear() && x.m === d.getMonth());
+    if (!mo) return;
+    if (e.a === "green") mo.g++;
+    else if (e.a === "yellow") mo.ge++;
+    else if (e.a === "red") mo.r++;
+  });
+  const maxTotal = Math.max(...months.map(x => x.g + x.ge + x.r), 1);
+  if (months.every(x => x.g + x.ge + x.r === 0)) {
+    el.innerHTML = '<div class="empty-hint">Noch keine Aktivitätsdaten vorhanden.</div>';
+    return;
+  }
+  const bw = 32, gap = (W - padL - 10 - 6 * bw) / 5;
+  let s = svgOpen(W, H);
+  for (let g = 0; g <= 3; g++) {
+    const v = Math.round((g / 3) * maxTotal);
+    const y = padT + (1 - g / 3) * (H - padT - padB);
+    s += '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - 6) + '" y2="' + y + '" stroke="var(--line)"/>';
+    s += '<text x="' + (padL - 4) + '" y="' + (y + 3) + '" font-size="9" fill="' + axisColor() + '" text-anchor="end">' + v + "</text>";
+  }
+  months.forEach((mo, i) => {
+    const x = padL + i * (bw + gap);
+    let y = padT + (H - padT - padB);
+    [["g", "var(--green)"], ["ge", "var(--yellow)"], ["r", "var(--red)"]].forEach(([kk, col]) => {
+      const hgt = (mo[kk] / maxTotal) * (H - padT - padB);
+      if (hgt > 0) {
+        y -= hgt;
+        s += '<rect x="' + x + '" y="' + y + '" width="' + bw + '" height="' + hgt + '" fill="' + col + '" rx="2"/>';
+      }
+    });
+    s += '<text x="' + (x + bw / 2) + '" y="' + (H - 6) + '" font-size="9" fill="' + axisColor() + '" text-anchor="middle">' + MONTHS[mo.m].slice(0, 3) + "</text>";
+  });
+  s += "</svg>";
+  el.innerHTML = s;
+}
+
+// Periodenstarts: Periodentag, dessen Vortag kein Periodentag ist
+function getPeriodStarts() {
+  const keys = Object.keys(data).filter(k => data[k].p).sort();
+  const starts = [];
+  keys.forEach(k => {
+    const prev = new Date(dateOf(k));
+    prev.setDate(prev.getDate() - 1);
+    if (!data[keyOf(prev)] || !data[keyOf(prev)].p) starts.push(k);
+  });
+  return starts;
+}
+function getPeriodLengths() {
+  const keys = Object.keys(data).filter(k => data[k].p).sort();
+  const runs = [];
+  let run = 0, prevKey = null;
+  keys.forEach(k => {
+    if (prevKey) {
+      const d = new Date(dateOf(prevKey)); d.setDate(d.getDate() + 1);
+      if (keyOf(d) === k) { run++; prevKey = k; return; }
+      runs.push(run);
+    }
+    run = 1; prevKey = k;
+  });
+  if (run > 0) runs.push(run);
+  return runs;
+}
+
+function renderCycleChart() {
+  const el = document.getElementById("chart-cycle");
+  const sub = document.getElementById("cycle-sub");
+  const starts = getPeriodStarts();
+  const cycles = [];
+  for (let i = 1; i < starts.length; i++) {
+    const len = Math.round((dateOf(starts[i]) - dateOf(starts[i - 1])) / 86400000);
+    if (len >= 15 && len <= 60) cycles.push({ start: starts[i - 1], len });
+  }
+  const last = cycles.slice(-8);
+  if (last.length === 0) {
+    sub.textContent = "Abstand zwischen den Periodenstarts";
+    el.innerHTML = '<div class="empty-hint">Mindestens zwei eingetragene Perioden nötig, um Zykluslängen zu berechnen.</div>';
+    return;
+  }
+  const avg = cycles.reduce((a, c) => a + c.len, 0) / cycles.length;
+  const pl = getPeriodLengths();
+  const avgP = pl.length ? pl.reduce((a, b) => a + b, 0) / pl.length : 0;
+  sub.textContent = "Ø Zyklus: " + avg.toFixed(1).replace(".", ",") + " Tage · Ø Periodendauer: " + avgP.toFixed(1).replace(".", ",") + " Tage";
+
+  const W = 360, H = 180, padL = 26, padB = 24, padT = 12;
+  const maxLen = Math.max(...last.map(c => c.len), 35);
+  const bw = Math.min(34, (W - padL - 10) / last.length - 8);
+  const gap = (W - padL - 10 - last.length * bw) / Math.max(last.length - 1, 1);
+  let s = svgOpen(W, H);
+  for (let g = 0; g <= 3; g++) {
+    const v = Math.round((g / 3) * maxLen);
+    const y = padT + (1 - g / 3) * (H - padT - padB);
+    s += '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - 6) + '" y2="' + y + '" stroke="var(--line)"/>';
+    s += '<text x="' + (padL - 4) + '" y="' + (y + 3) + '" font-size="9" fill="' + axisColor() + '" text-anchor="end">' + v + "</text>";
+  }
+  // Durchschnittslinie
+  const avgY = padT + (1 - avg / maxLen) * (H - padT - padB);
+  s += '<line x1="' + padL + '" y1="' + avgY + '" x2="' + (W - 6) + '" y2="' + avgY + '" stroke="var(--period)" stroke-dasharray="4 3" stroke-width="1.5"/>';
+  last.forEach((c, i) => {
+    const x = padL + i * (bw + gap);
+    const hgt = (c.len / maxLen) * (H - padT - padB);
+    const y = padT + (H - padT - padB) - hgt;
+    s += '<rect x="' + x + '" y="' + y + '" width="' + bw + '" height="' + hgt + '" fill="var(--period)" opacity="0.8" rx="3"/>';
+    s += '<text x="' + (x + bw / 2) + '" y="' + (y - 3) + '" font-size="9" fill="var(--text)" text-anchor="middle" font-weight="600">' + c.len + "</text>";
+    const d = dateOf(c.start);
+    s += '<text x="' + (x + bw / 2) + '" y="' + (H - 6) + '" font-size="8" fill="' + axisColor() + '" text-anchor="middle">' + d.getDate() + "." + (d.getMonth() + 1) + ".</text>";
+  });
+  s += "</svg>";
+  el.innerHTML = s;
+}
+
+function renderStats() {
+  // aktuelles Gewicht = letzter Eintrag
+  const wKeys = Object.keys(data).filter(k => typeof data[k].w === "number").sort();
+  const stW = document.getElementById("st-weight");
+  const stD = document.getElementById("st-delta");
+  if (wKeys.length) {
+    const lastKey = wKeys[wKeys.length - 1];
+    stW.textContent = fmtW(data[lastKey].w) + " kg";
+    // Vergleich mit letztem Wert, der mind. 7 Tage zurückliegt
+    const cutoff = new Date(dateOf(lastKey)); cutoff.setDate(cutoff.getDate() - 7);
+    const older = wKeys.filter(k => dateOf(k) <= cutoff);
+    if (older.length) {
+      const diff = data[lastKey].w - data[older[older.length - 1]].w;
+      stD.textContent = (diff > 0 ? "+" : "") + fmtW(diff) + " kg";
+      stD.style.color = diff > 0 ? "var(--red)" : diff < 0 ? "var(--green)" : "var(--text)";
+    } else { stD.textContent = "–"; }
+  } else { stW.textContent = "–"; stD.textContent = "–"; }
+
+  const starts = getPeriodStarts();
+  const lens = [];
+  for (let i = 1; i < starts.length; i++) {
+    const len = Math.round((dateOf(starts[i]) - dateOf(starts[i - 1])) / 86400000);
+    if (len >= 15 && len <= 60) lens.push(len);
+  }
+  document.getElementById("st-cycle").textContent = lens.length
+    ? (lens.reduce((a, b) => a + b, 0) / lens.length).toFixed(0) + " Tage" : "–";
+}
+
+function renderCharts() {
+  renderStats();
+  renderWeightChart();
+  renderActivityChart();
+  renderCycleChart();
+}
+
+// ===================== Export / Import / Löschen =====================
+document.getElementById("btn-export").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "mein-tracker-backup-" + keyOf(new Date()) + ".json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+document.getElementById("btn-import").addEventListener("click", () => {
+  document.getElementById("import-file").click();
+});
+document.getElementById("import-file").addEventListener("change", (ev) => {
+  const f = ev.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const imp = JSON.parse(r.result);
+      if (typeof imp !== "object" || Array.isArray(imp)) throw new Error();
+      Object.assign(data, imp);
+      saveData();
+      renderCalendar();
+      showToast("Import erfolgreich ✓");
+    } catch (e) { showToast("Ungültige Datei"); }
+  };
+  r.readAsText(f);
+  ev.target.value = "";
+});
+document.getElementById("btn-wipe").addEventListener("click", () => {
+  if (confirm("Wirklich ALLE Daten unwiderruflich löschen?")) {
+    data = {};
+    saveData();
+    renderCalendar();
+    showToast("Alle Daten gelöscht");
+  }
+});
+
+// ===================== Tabs & Toast =====================
+document.querySelectorAll(".tabbar button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tabbar button").forEach(b => b.classList.toggle("on", b === btn));
+    document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === btn.dataset.view));
+    if (btn.dataset.view === "view-charts") renderCharts();
+    window.scrollTo(0, 0);
+  });
+});
+
+let toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2000);
+}
+
+// Service Worker für Offline-Nutzung
+if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+
+renderCalendar();
+</script>
+</body>
+</html>
