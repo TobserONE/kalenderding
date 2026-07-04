@@ -87,6 +87,9 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
 .tile .p-flag {
   position: absolute; top: 2px; right: 3px; font-size: 0.6rem;
 }
+.tile .n-flag {
+  position: absolute; top: 2px; left: 3px; font-size: 0.55rem;
+}
 .legend {
   display: flex; flex-wrap: wrap; gap: 10px; padding: 14px 4px 0;
   font-size: 0.72rem; color: var(--text2);
@@ -144,6 +147,18 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
 }
 .switch input:checked + .slider { background: var(--period); }
 .switch input:checked + .slider:before { transform: translateX(20px); }
+#in-note {
+  width: 100%; border: 1px solid var(--line); background: var(--bg); color: var(--text);
+  border-radius: 12px; padding: 10px 12px; font-size: 1rem; font-family: inherit;
+  resize: none; min-height: 64px; outline: none;
+}
+.seg { display: flex; gap: 8px; }
+.seg button {
+  flex: 1; padding: 10px 0; border-radius: 10px; border: 2px solid var(--line);
+  background: var(--bg); color: var(--text); font-size: 0.95rem; cursor: pointer;
+}
+.seg button.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.stats.two { grid-template-columns: repeat(2, 1fr); }
 .sheet-btns { display: flex; gap: 10px; margin-top: 6px; }
 .sheet-btns button {
   flex: 1; padding: 13px 0; border-radius: 12px; border: none;
@@ -189,7 +204,7 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
   flex: 1; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line);
   background: var(--bg); color: var(--text); font-size: 0.95rem; font-family: inherit;
 }
-.period-form button {
+.period-form > button {
   width: 100%; padding: 11px 0; border-radius: 10px; border: none;
   background: var(--period); color: #fff; font-size: 0.95rem; font-weight: 600; cursor: pointer;
 }
@@ -233,7 +248,8 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
     <span><i style="background:var(--green)"></i> Aktivität hoch</span>
     <span><i style="background:var(--yellow)"></i> mittel</span>
     <span><i style="background:var(--red)"></i> keine</span>
-    <span>🩸 Periode</span>
+    <span id="legend-period">🩸 Periode</span>
+    <span>📝 Notiz</span>
   </div>
   <div class="legend">
     <span><i class="sq" style="background:var(--tint-up)"></i> Gewicht ↑</span>
@@ -248,12 +264,12 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
   <div class="stats">
     <div class="stat"><div class="v" id="st-weight">–</div><div class="l">Aktuelles Gewicht</div></div>
     <div class="stat"><div class="v" id="st-delta">–</div><div class="l">Δ 7 Tage</div></div>
-    <div class="stat"><div class="v" id="st-cycle">–</div><div class="l">Ø Zyklus</div></div>
+    <div class="stat" id="st-cycle-box"><div class="v" id="st-cycle">–</div><div class="l">Ø Zyklus</div></div>
   </div>
 
   <div class="card">
     <h3>Gewichtsverlauf</h3>
-    <div class="sub">Rosa Balken = Periodentage</div>
+    <div class="sub" id="w-sub">Rosa Balken = Periodentage</div>
     <div class="range-btns" id="w-range">
       <button data-d="30" class="on">30 Tage</button>
       <button data-d="90">90 Tage</button>
@@ -268,7 +284,7 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
     <div id="chart-activity"></div>
   </div>
 
-  <div class="card">
+  <div class="card" id="card-cycle">
     <h3>Zykluslänge</h3>
     <div class="sub" id="cycle-sub">Abstand zwischen den Periodenstarts</div>
     <div id="chart-cycle"></div>
@@ -279,6 +295,20 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
 <div class="view" id="view-more">
   <h1>Mehr</h1>
   <div class="period-form">
+    <h3>Einstellungen</h3>
+    <div class="field" style="margin-bottom:10px">
+      <label style="display:block;font-size:0.78rem;color:var(--text2);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.03em">Geschlecht</label>
+      <div class="seg" id="gender-seg">
+        <button data-g="w">Weiblich</button>
+        <button data-g="m">Männlich</button>
+      </div>
+    </div>
+    <div class="toggle-row" id="period-off-row" style="display:none">
+      <span class="lbl">🩸 Periodenfunktion</span>
+      <label class="switch"><input type="checkbox" id="set-period-on"><span class="slider"></span></label>
+    </div>
+  </div>
+  <div class="period-form" id="period-range-card">
     <h3>🩸 Periode als Zeitraum eintragen</h3>
     <div class="row"><label>Von</label><input type="date" id="p-start"></div>
     <div class="row"><label>Bis</label><input type="date" id="p-end"></div>
@@ -310,11 +340,15 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
       <button id="a-red" title="keine">🔴</button>
     </div>
   </div>
-  <div class="field">
+  <div class="field" id="field-period">
     <div class="toggle-row">
       <span class="lbl">🩸 Periode an diesem Tag</span>
       <label class="switch"><input type="checkbox" id="in-period"><span class="slider"></span></label>
     </div>
+  </div>
+  <div class="field">
+    <label>Notiz</label>
+    <textarea id="in-note" rows="2" placeholder="z. B. Krank, Urlaub, besonderes Training …"></textarea>
   </div>
   <div class="sheet-btns">
     <button class="btn-del" id="btn-clear">Eintrag löschen</button>
@@ -339,6 +373,25 @@ let data = {};
 try { data = JSON.parse(localStorage.getItem(STORE_KEY) || "{}"); } catch (e) { data = {}; }
 
 function saveData() { localStorage.setItem(STORE_KEY, JSON.stringify(data)); }
+
+// ===================== Einstellungen =====================
+const SET_KEY = "trackerSettings";
+let settings = { gender: "w", periodOff: false };
+try { Object.assign(settings, JSON.parse(localStorage.getItem(SET_KEY) || "{}")); } catch (e) {}
+
+function saveSettings() { localStorage.setItem(SET_KEY, JSON.stringify(settings)); }
+function periodEnabled() { return !(settings.gender === "m" && settings.periodOff); }
+
+function applySettings() {
+  document.querySelectorAll("#gender-seg button").forEach(b => b.classList.toggle("on", b.dataset.g === settings.gender));
+  document.getElementById("period-off-row").style.display = settings.gender === "m" ? "flex" : "none";
+  document.getElementById("set-period-on").checked = !settings.periodOff;
+  const en = periodEnabled();
+  document.getElementById("field-period").style.display = en ? "" : "none";
+  document.getElementById("period-range-card").style.display = en ? "" : "none";
+  document.getElementById("legend-period").style.display = en ? "" : "none";
+  renderCalendar();
+}
 
 function keyOf(d) {
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
@@ -411,7 +464,8 @@ function renderCalendar() {
     if (typeof e.w === "number") {
       html += '<span class="w">' + fmtW(e.w) + (arrow ? ' <span class="arrow">' + arrow + "</span>" : "") + "</span>";
     }
-    if (e.p) html += '<span class="p-flag">🩸</span>';
+    if (e.p && periodEnabled()) html += '<span class="p-flag">🩸</span>';
+    if (e.n) html += '<span class="n-flag">📝</span>';
     tile.innerHTML = html;
     tile.addEventListener("click", () => openSheet(key));
     grid.appendChild(tile);
@@ -437,6 +491,7 @@ function openSheet(key) {
   document.getElementById("sheet-title").textContent = fmtDE(key);
   document.getElementById("in-weight").value = typeof e.w === "number" ? fmtW(e.w) : "";
   document.getElementById("in-period").checked = !!e.p;
+  document.getElementById("in-note").value = e.n || "";
   setActDirect(e.a || null);
   document.getElementById("overlay").classList.add("open");
   document.getElementById("sheet").classList.add("open");
@@ -470,7 +525,10 @@ document.getElementById("btn-save").addEventListener("click", () => {
     e.w = Math.round(w * 10) / 10;
   }
   if (selAct) e.a = selAct;
-  if (document.getElementById("in-period").checked) e.p = true;
+  if (document.getElementById("in-period").checked && periodEnabled()) e.p = true;
+  else if (data[sheetKey] && data[sheetKey].p && !periodEnabled()) e.p = true; // Periodendaten bei deaktivierter Funktion nicht verwerfen
+  const note = document.getElementById("in-note").value.trim();
+  if (note) e.n = note;
   if (Object.keys(e).length === 0) delete data[sheetKey];
   else data[sheetKey] = e;
   saveData();
@@ -536,7 +594,7 @@ function renderWeightChart() {
   for (let i = 0; i < weightRange; i++) {
     const e = data[keyOf(d)];
     if (e && typeof e.w === "number") pts.push({ i, w: e.w, key: keyOf(d) });
-    if (e && e.p) periodDays.push(i);
+    if (e && e.p && periodEnabled()) periodDays.push(i);
     d.setDate(d.getDate() + 1);
   }
   if (pts.length < 2) {
@@ -733,10 +791,15 @@ function renderStats() {
 }
 
 function renderCharts() {
+  const en = periodEnabled();
+  document.getElementById("card-cycle").style.display = en ? "" : "none";
+  document.getElementById("st-cycle-box").style.display = en ? "" : "none";
+  document.getElementById("w-sub").style.display = en ? "" : "none";
+  document.querySelector(".stats").classList.toggle("two", !en);
   renderStats();
   renderWeightChart();
   renderActivityChart();
-  renderCycleChart();
+  if (en) renderCycleChart();
 }
 
 // ===================== Export / Import / Löschen =====================
@@ -777,6 +840,20 @@ document.getElementById("btn-wipe").addEventListener("click", () => {
   }
 });
 
+// ===================== Einstellungen: Bedienung =====================
+document.getElementById("gender-seg").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button");
+  if (!b) return;
+  settings.gender = b.dataset.g;
+  saveSettings();
+  applySettings();
+});
+document.getElementById("set-period-on").addEventListener("change", (ev) => {
+  settings.periodOff = !ev.target.checked;
+  saveSettings();
+  applySettings();
+});
+
 // ===================== Tabs & Toast =====================
 document.querySelectorAll(".tabbar button").forEach(btn => {
   btn.addEventListener("click", () => {
@@ -801,7 +878,7 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 
-renderCalendar();
+applySettings();
 </script>
 </body>
 </html>
