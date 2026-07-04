@@ -303,10 +303,6 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
         <button data-g="m">Männlich</button>
       </div>
     </div>
-    <div class="toggle-row" id="period-off-row" style="display:none">
-      <span class="lbl">🩸 Periodenfunktion</span>
-      <label class="switch"><input type="checkbox" id="set-period-on"><span class="slider"></span></label>
-    </div>
   </div>
   <div class="period-form" id="period-range-card">
     <h3>🩸 Periode als Zeitraum eintragen</h3>
@@ -376,16 +372,15 @@ function saveData() { localStorage.setItem(STORE_KEY, JSON.stringify(data)); }
 
 // ===================== Einstellungen =====================
 const SET_KEY = "trackerSettings";
-let settings = { gender: "w", periodOff: false };
+let settings = { gender: "w" };
 try { Object.assign(settings, JSON.parse(localStorage.getItem(SET_KEY) || "{}")); } catch (e) {}
 
 function saveSettings() { localStorage.setItem(SET_KEY, JSON.stringify(settings)); }
-function periodEnabled() { return !(settings.gender === "m" && settings.periodOff); }
+// bei Männlich ist die Periodenfunktion immer deaktiviert
+function periodEnabled() { return settings.gender !== "m"; }
 
 function applySettings() {
   document.querySelectorAll("#gender-seg button").forEach(b => b.classList.toggle("on", b.dataset.g === settings.gender));
-  document.getElementById("period-off-row").style.display = settings.gender === "m" ? "flex" : "none";
-  document.getElementById("set-period-on").checked = !settings.periodOff;
   const en = periodEnabled();
   document.getElementById("field-period").style.display = en ? "" : "none";
   document.getElementById("period-range-card").style.display = en ? "" : "none";
@@ -848,12 +843,6 @@ document.getElementById("gender-seg").addEventListener("click", (ev) => {
   saveSettings();
   applySettings();
 });
-document.getElementById("set-period-on").addEventListener("change", (ev) => {
-  settings.periodOff = !ev.target.checked;
-  saveSettings();
-  applySettings();
-});
-
 // ===================== Tabs & Toast =====================
 document.querySelectorAll(".tabbar button").forEach(btn => {
   btn.addEventListener("click", () => {
