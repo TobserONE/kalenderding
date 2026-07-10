@@ -310,11 +310,31 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
     <div class="row"><label>Bis</label><input type="date" id="p-end"></div>
     <button id="btn-period-range">Zeitraum speichern</button>
   </div>
+  <div class="period-form" id="cloud-card" style="display:none">
+    <h3>☁️ Cloud-Sync</h3>
+    <div id="cloud-logged-out">
+      <div class="row"><label style="width:70px">E-Mail</label><input type="email" id="cl-email" autocomplete="email" autocapitalize="off"></div>
+      <div class="row"><label style="width:70px">Passwort</label><input type="password" id="cl-pass" autocomplete="current-password"></div>
+      <div class="sheet-btns" style="margin-top:0">
+        <button class="btn-del" id="btn-signup" style="color:var(--accent)">Registrieren</button>
+        <button class="btn-save" id="btn-login">Anmelden</button>
+      </div>
+      <p class="hint" style="padding:8px 2px 0">Mit einem Konto werden deine Daten zusätzlich in der Cloud gesichert (Server in der EU) und automatisch zwischen deinen Geräten synchronisiert. Ohne Konto bleibt alles nur auf diesem Gerät.</p>
+    </div>
+    <div id="cloud-logged-in" style="display:none">
+      <p style="font-size:0.9rem;margin-bottom:4px">Angemeldet als <b id="cl-user"></b></p>
+      <p class="hint" style="padding:0 0 10px" id="cl-status"></p>
+      <div class="sheet-btns" style="margin-top:0">
+        <button class="btn-del" id="btn-logout">Abmelden</button>
+        <button class="btn-save" id="btn-sync">Jetzt synchronisieren</button>
+      </div>
+    </div>
+  </div>
   <button class="menu-btn" id="btn-export">📤 Daten exportieren (Backup)</button>
   <button class="menu-btn" id="btn-import">📥 Daten importieren</button>
   <input type="file" id="import-file" accept=".json" style="display:none">
   <button class="menu-btn danger" id="btn-wipe">🗑️ Alle Daten löschen</button>
-  <p class="hint">Alle Daten werden nur lokal auf diesem Gerät gespeichert. Tipp: Öffne die Seite in Safari und wähle „Teilen → Zum Home-Bildschirm", um die App wie eine normale App zu nutzen. Erstelle regelmäßig ein Backup per Export.</p>
+  <p class="hint">Deine Daten werden lokal auf diesem Gerät gespeichert – mit Cloud-Konto zusätzlich in der Cloud. Tipp: Öffne die Seite in Safari und wähle „Teilen → Zum Home-Bildschirm", um die App wie eine normale App zu nutzen.</p>
 </div>
 
 <!-- ===== Tageseingabe ===== -->
@@ -361,6 +381,7 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
 
 <div class="toast" id="toast"></div>
 
+<script src="supabase.js"></script>
 <script>
 "use strict";
 // ===================== Daten =====================
@@ -528,8 +549,8 @@ document.getElementById("btn-save").addEventListener("click", () => {
   else if (data[sheetKey] && data[sheetKey].p && !periodEnabled()) e.p = true; // Periodendaten bei deaktivierter Funktion nicht verwerfen
   const note = document.getElementById("in-note").value.trim();
   if (note) e.n = note;
-  if (Object.keys(e).length === 0) delete data[sheetKey];
-  else data[sheetKey] = e;
+  if (Object.keys(e).length === 0) { delete data[sheetKey]; markDeleted(sheetKey); }
+  else { e.u = Date.now(); data[sheetKey] = e; markDirty(sheetKey); }
   saveData();
   closeSheet();
   renderCalendar();
@@ -538,6 +559,7 @@ document.getElementById("btn-save").addEventListener("click", () => {
 
 document.getElementById("btn-clear").addEventListener("click", () => {
   delete data[sheetKey];
+  markDeleted(sheetKey);
   saveData();
   closeSheet();
   renderCalendar();
@@ -556,9 +578,13 @@ document.getElementById("btn-period-range").addEventListener("click", () => {
     const k = keyOf(d);
     data[k] = data[k] || {};
     data[k].p = true;
+    data[k].u = Date.now();
+    dirty[k] = true;
     d.setDate(d.getDate() + 1);
     n++;
   }
+  persistSync();
+  scheduleSync();
   saveData();
   renderCalendar();
   showToast("Periode eingetragen (" + n + " Tage)");
@@ -822,6 +848,9 @@ document.getElementById("import-file").addEventListener("change", (ev) => {
       const imp = JSON.parse(r.result);
       if (typeof imp !== "object" || Array.isArray(imp)) throw new Error();
       Object.assign(data, imp);
+      Object.keys(imp).forEach(k => { if (data[k]) { data[k].u = Date.now(); dirty[k] = true; } });
+      persistSync();
+      scheduleSync();
       saveData();
       renderCalendar();
       showToast("Import erfolgreich ✓");
@@ -831,7 +860,11 @@ document.getElementById("import-file").addEventListener("change", (ev) => {
   ev.target.value = "";
 });
 document.getElementById("btn-wipe").addEventListener("click", () => {
-  if (confirm("Wirklich ALLE Daten unwiderruflich löschen?")) {
+  const msg = currentUser ? "Wirklich ALLE Daten unwiderruflich löschen (auch in der Cloud)?" : "Wirklich ALLE Daten unwiderruflich löschen?";
+  if (confirm(msg)) {
+    Object.keys(data).forEach(k => { tombs[k] = Date.now(); dirty[k] = true; });
+    persistSync();
+    scheduleSync();
     data = {};
     saveData();
     renderCalendar();
@@ -844,6 +877,10 @@ document.getElementById("gender-seg").addEventListener("click", (ev) => {
   const b = ev.target.closest("button");
   if (!b) return;
   settings.gender = b.dataset.g;
+  settings.u = Date.now();
+  dirty["_settings"] = true;
+  persistSync();
+  scheduleSync();
   saveSettings();
   applySettings();
 });
@@ -864,6 +901,174 @@ function showToast(msg) {
   t.classList.add("show");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove("show"), 2000);
+}
+
+// ===================== Cloud-Sync (Supabase) =====================
+// Zugangsdaten des Supabase-Projekts (Dashboard → Settings → API).
+// Solange beide Werte leer sind, ist der Cloud-Sync deaktiviert und die App
+// arbeitet rein lokal wie bisher.
+const SUPABASE_URL = "https://iemjvlqkteutuqivivxo.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImllbWp2bHFrdGV1dHVxaXZpdnhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2ODU1NjAsImV4cCI6MjA5OTI2MTU2MH0.DOkaUqOtw4bHlZXJ1lScvHSGslx-ubKKxkJBiOcfUcQ";
+
+// Sync-Verwaltung: "dirty" = Tage mit noch nicht hochgeladenen Änderungen,
+// "tombs" = gelöschte Tage (Zeitstempel), damit Löschungen auch andere Geräte erreichen.
+const DIRTY_KEY = "trackerDirty", TOMB_KEY = "trackerTombstones";
+let dirty = {}, tombs = {};
+try { dirty = JSON.parse(localStorage.getItem(DIRTY_KEY) || "{}"); } catch (e) { dirty = {}; }
+try { tombs = JSON.parse(localStorage.getItem(TOMB_KEY) || "{}"); } catch (e) { tombs = {}; }
+let lastSync = Number(localStorage.getItem("trackerLastSync") || 0);
+
+function persistSync() {
+  localStorage.setItem(DIRTY_KEY, JSON.stringify(dirty));
+  localStorage.setItem(TOMB_KEY, JSON.stringify(tombs));
+}
+function markDirty(day) { dirty[day] = true; persistSync(); scheduleSync(); }
+function markDeleted(day) { tombs[day] = Date.now(); dirty[day] = true; persistSync(); scheduleSync(); }
+
+const sb = (SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase)
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+let currentUser = null;
+let syncing = false;
+let syncTimer = null;
+
+function scheduleSync() {
+  if (!sb) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncNow, 1500);
+}
+
+function updateCloudUI(statusMsg) {
+  if (!sb) return;
+  document.getElementById("cloud-card").style.display = "";
+  document.getElementById("cloud-logged-out").style.display = currentUser ? "none" : "";
+  document.getElementById("cloud-logged-in").style.display = currentUser ? "" : "none";
+  if (!currentUser) return;
+  document.getElementById("cl-user").textContent = currentUser.email || "";
+  const pending = Object.keys(dirty).length;
+  document.getElementById("cl-status").textContent = statusMsg ||
+    (lastSync
+      ? "Zuletzt synchronisiert: " + new Date(lastSync).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) + " Uhr" + (pending ? " · " + pending + " Änderung(en) ausstehend" : "")
+      : "Noch nicht synchronisiert");
+}
+
+// Beim ersten Anmelden auf diesem Gerät: alle lokalen Daten zum Hochladen vormerken
+function migrateIfNeeded() {
+  const flag = "trackerCloudMigrated:" + currentUser.id;
+  if (localStorage.getItem(flag)) return;
+  Object.keys(data).forEach(k => {
+    if (!data[k].u) data[k].u = Date.now();
+    dirty[k] = true;
+  });
+  if (!settings.u) settings.u = Date.now();
+  dirty["_settings"] = true;
+  saveData();
+  saveSettings();
+  persistSync();
+  localStorage.setItem(flag, "1");
+}
+
+async function syncNow() {
+  if (!sb || !currentUser || syncing || !navigator.onLine) { updateCloudUI(); return; }
+  syncing = true;
+  updateCloudUI("Synchronisiere …");
+  try {
+    // 1) Cloud-Stand holen und mischen – pro Tag gewinnt die neueste Änderung
+    const res = await sb.from("entries").select("day,data,updated_at");
+    if (res.error) throw res.error;
+    let dataChanged = false, settingsChanged = false;
+    res.data.forEach(r => {
+      const remoteU = r.updated_at || 0;
+      if (r.day === "_settings") {
+        if (r.data && remoteU > (settings.u || 0)) {
+          Object.assign(settings, r.data);
+          settings.u = remoteU;
+          delete dirty["_settings"];
+          settingsChanged = true;
+        }
+        return;
+      }
+      const localU = Math.max(tombs[r.day] || 0, (data[r.day] && data[r.day].u) || 0);
+      if (remoteU > localU) {
+        if (r.data) { data[r.day] = Object.assign({}, r.data, { u: remoteU }); delete tombs[r.day]; }
+        else { delete data[r.day]; delete tombs[r.day]; }
+        delete dirty[r.day];
+        dataChanged = true;
+      }
+    });
+    // 2) Lokale Änderungen hochladen
+    const days = Object.keys(dirty);
+    if (days.length) {
+      const rows = days.map(day => {
+        if (day === "_settings") return { user_id: currentUser.id, day: day, data: { gender: settings.gender }, updated_at: settings.u || Date.now() };
+        if (data[day]) {
+          const copy = Object.assign({}, data[day]);
+          const u = copy.u || Date.now();
+          delete copy.u;
+          return { user_id: currentUser.id, day: day, data: copy, updated_at: u };
+        }
+        return { user_id: currentUser.id, day: day, data: null, updated_at: tombs[day] || Date.now() };
+      });
+      const up = await sb.from("entries").upsert(rows);
+      if (up.error) throw up.error;
+      dirty = {};
+    }
+    lastSync = Date.now();
+    localStorage.setItem("trackerLastSync", String(lastSync));
+    persistSync();
+    if (dataChanged || settingsChanged) { saveData(); saveSettings(); }
+    if (settingsChanged) applySettings();
+    else if (dataChanged) renderCalendar();
+    if ((dataChanged || settingsChanged) && document.getElementById("view-charts").classList.contains("active")) renderCharts();
+    updateCloudUI();
+  } catch (err) {
+    updateCloudUI("Synchronisierung fehlgeschlagen – wird später erneut versucht");
+  } finally {
+    syncing = false;
+  }
+}
+
+function authErrorText(error) {
+  const m = (error && error.message) || "";
+  if (m.indexOf("Invalid login credentials") >= 0) return "E-Mail oder Passwort falsch";
+  if (m.indexOf("already registered") >= 0) return "Diese E-Mail ist bereits registriert";
+  if (m.indexOf("at least 6 characters") >= 0) return "Passwort: mindestens 6 Zeichen";
+  if (m.indexOf("valid email") >= 0) return "Bitte gültige E-Mail-Adresse eingeben";
+  if (m.indexOf("Email not confirmed") >= 0) return "E-Mail noch nicht bestätigt – bitte Postfach prüfen";
+  return m || "Unbekannter Fehler";
+}
+
+if (sb) {
+  sb.auth.onAuthStateChange((_ev, session) => {
+    currentUser = session ? session.user : null;
+    if (currentUser) { migrateIfNeeded(); scheduleSync(); }
+    updateCloudUI();
+  });
+  document.getElementById("btn-login").addEventListener("click", async () => {
+    const email = document.getElementById("cl-email").value.trim();
+    const pass = document.getElementById("cl-pass").value;
+    if (!email || !pass) { showToast("Bitte E-Mail und Passwort eingeben"); return; }
+    const r = await sb.auth.signInWithPassword({ email: email, password: pass });
+    if (r.error) { showToast(authErrorText(r.error)); return; }
+    document.getElementById("cl-pass").value = "";
+    showToast("Angemeldet ✓");
+  });
+  document.getElementById("btn-signup").addEventListener("click", async () => {
+    const email = document.getElementById("cl-email").value.trim();
+    const pass = document.getElementById("cl-pass").value;
+    if (!email || !pass) { showToast("Bitte E-Mail und Passwort eingeben"); return; }
+    const r = await sb.auth.signUp({ email: email, password: pass });
+    if (r.error) { showToast(authErrorText(r.error)); return; }
+    document.getElementById("cl-pass").value = "";
+    if (r.data && r.data.session) showToast("Konto erstellt ✓");
+    else showToast("Bestätigungs-E-Mail gesendet – bitte Postfach prüfen");
+  });
+  document.getElementById("btn-logout").addEventListener("click", async () => {
+    await sb.auth.signOut();
+    showToast("Abgemeldet – deine Daten bleiben lokal erhalten");
+  });
+  document.getElementById("btn-sync").addEventListener("click", () => syncNow());
+  window.addEventListener("online", scheduleSync);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) scheduleSync(); });
 }
 
 // Service Worker für Offline-Nutzung

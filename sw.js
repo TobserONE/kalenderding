@@ -1,5 +1,5 @@
-const CACHE = "mein-tracker-v3";
-const FILES = ["./", "./index.html", "./manifest.json", "./icon-180.png", "./icon-512.png"];
+const CACHE = "mein-tracker-v4";
+const FILES = ["./", "./index.html", "./manifest.json", "./supabase.js", "./icon-180.png", "./icon-512.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)));
@@ -15,8 +15,10 @@ self.addEventListener("activate", (e) => {
   self.clients.claim();
 });
 
-// Netzwerk zuerst, bei Offline aus dem Cache
+// Netzwerk zuerst, bei Offline aus dem Cache.
+// Nur eigene GET-Anfragen cachen – API-Aufrufe (Supabase) gehen direkt ins Netz.
 self.addEventListener("fetch", (e) => {
+  if (e.request.method !== "GET" || new URL(e.request.url).origin !== location.origin) return;
   e.respondWith(
     fetch(e.request)
       .then((res) => {
