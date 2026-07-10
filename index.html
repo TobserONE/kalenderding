@@ -324,7 +324,7 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
   <div class="field">
     <label>Gewicht</label>
     <div class="weight-row">
-      <input type="text" inputmode="decimal" id="in-weight" placeholder="z. B. 68,5">
+      <input type="text" inputmode="decimal" id="in-weight" placeholder="z. B. 68,45">
       <span class="unit">kg</span>
     </div>
   </div>
@@ -399,7 +399,11 @@ function fmtDE(key) {
   const d = dateOf(key);
   return d.toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "long", year: "numeric" });
 }
-function fmtW(w) { return w.toFixed(1).replace(".", ","); }
+function fmtW(w) {
+  let s = w.toFixed(2);
+  if (s.endsWith("0")) s = s.slice(0, -1); // 68,50 → 68,5
+  return s.replace(".", ",");
+}
 
 // Letztes eingetragenes Gewicht vor dem angegebenen Tag (max. 60 Tage zurück)
 function prevWeight(key) {
@@ -446,7 +450,7 @@ function renderCalendar() {
     if (typeof e.w === "number") {
       const pw = prevWeight(key);
       if (pw !== null) {
-        const diff = Math.round((e.w - pw) * 10) / 10;
+        const diff = Math.round((e.w - pw) * 100) / 100;
         if (diff > 0) { tile.classList.add("up"); arrow = "▲"; }
         else if (diff < 0) { tile.classList.add("down"); arrow = "▼"; }
         else { tile.classList.add("same"); arrow = "="; }
@@ -517,7 +521,7 @@ document.getElementById("btn-save").addEventListener("click", () => {
   if (raw !== "") {
     const w = parseFloat(raw);
     if (isNaN(w) || w <= 0 || w > 400) { showToast("Bitte gültiges Gewicht eingeben"); return; }
-    e.w = Math.round(w * 10) / 10;
+    e.w = Math.round(w * 100) / 100;
   }
   if (selAct) e.a = selAct;
   if (document.getElementById("in-period").checked && periodEnabled()) e.p = true;
