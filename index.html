@@ -229,6 +229,37 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
   font-size: 0.85rem; z-index: 60; opacity: 0; transition: opacity 0.3s; pointer-events: none;
 }
 .toast.show { opacity: 1; }
+
+/* ---------- Dr. Now ---------- */
+.drnow-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  display: none; z-index: 70; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.drnow-overlay.open { display: flex; }
+.drnow-card {
+  background: var(--card); border-radius: 18px; padding: 22px 20px;
+  max-width: 420px; width: 100%; text-align: center;
+  animation: drnow-pop 0.25s ease;
+}
+@keyframes drnow-pop {
+  from { transform: scale(0.85); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.drnow-card .avatar {
+  width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 10px;
+  background: var(--bg); display: flex; align-items: center; justify-content: center;
+  font-size: 2rem; border: 2px solid var(--line);
+}
+.drnow-card .name { font-weight: 700; font-size: 0.95rem; margin-bottom: 2px; }
+.drnow-card .sub { font-size: 0.72rem; color: var(--text2); margin-bottom: 14px; }
+.drnow-card .quote {
+  font-size: 1.05rem; font-style: italic; line-height: 1.45; margin-bottom: 18px;
+}
+.drnow-card button {
+  width: 100%; padding: 12px 0; border-radius: 12px; border: none;
+  background: var(--accent); color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer;
+}
 </style>
 </head>
 <body>
@@ -302,6 +333,10 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
         <button data-g="w">Weiblich</button>
         <button data-g="m">Männlich</button>
       </div>
+    </div>
+    <div class="toggle-row">
+      <span class="lbl">🥼 Dr.-Now-Kommentare</span>
+      <label class="switch"><input type="checkbox" id="set-drnow"><span class="slider"></span></label>
     </div>
   </div>
   <div class="period-form" id="period-range-card">
@@ -381,6 +416,17 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
 
 <div class="toast" id="toast"></div>
 
+<!-- ===== Dr. Now ===== -->
+<div class="drnow-overlay" id="drnow-overlay">
+  <div class="drnow-card">
+    <div class="avatar">👨‍⚕️</div>
+    <div class="name">Dr. Now</div>
+    <div class="sub">Facharzt für ehrliche Worte</div>
+    <div class="quote" id="drnow-quote"></div>
+    <button id="drnow-ok">Ja, Dr. Now</button>
+  </div>
+</div>
+
 <script src="supabase.js"></script>
 <script>
 "use strict";
@@ -393,7 +439,7 @@ function saveData() { localStorage.setItem(STORE_KEY, JSON.stringify(data)); }
 
 // ===================== Einstellungen =====================
 const SET_KEY = "trackerSettings";
-let settings = { gender: "w" };
+let settings = { gender: "w", drnow: true };
 try { Object.assign(settings, JSON.parse(localStorage.getItem(SET_KEY) || "{}")); } catch (e) {}
 
 function saveSettings() { localStorage.setItem(SET_KEY, JSON.stringify(settings)); }
@@ -402,6 +448,7 @@ function periodEnabled() { return settings.gender !== "m"; }
 
 function applySettings() {
   document.querySelectorAll("#gender-seg button").forEach(b => b.classList.toggle("on", b.dataset.g === settings.gender));
+  document.getElementById("set-drnow").checked = settings.drnow !== false;
   const en = periodEnabled();
   document.getElementById("field-period").style.display = en ? "" : "none";
   document.getElementById("period-range-card").style.display = en ? "" : "none";
@@ -538,6 +585,7 @@ document.getElementById("overlay").addEventListener("click", closeSheet);
 
 document.getElementById("btn-save").addEventListener("click", () => {
   const raw = document.getElementById("in-weight").value.trim().replace(",", ".");
+  const oldW = data[sheetKey] && typeof data[sheetKey].w === "number" ? data[sheetKey].w : null;
   const e = {};
   if (raw !== "") {
     const w = parseFloat(raw);
@@ -555,6 +603,11 @@ document.getElementById("btn-save").addEventListener("click", () => {
   closeSheet();
   renderCalendar();
   showToast("Gespeichert ✓");
+  // Dr. Now meldet sich, wenn ein neues bzw. geändertes Gewicht eingetragen wurde
+  if (settings.drnow !== false && typeof e.w === "number" && e.w !== oldW) {
+    const pw = prevWeight(sheetKey);
+    showDrNow(pw === null ? "first" : e.w > pw ? "up" : e.w < pw ? "down" : "same");
+  }
 });
 
 document.getElementById("btn-clear").addEventListener("click", () => {
@@ -884,6 +937,60 @@ document.getElementById("gender-seg").addEventListener("click", (ev) => {
   saveSettings();
   applySettings();
 });
+document.getElementById("set-drnow").addEventListener("change", (ev) => {
+  settings.drnow = ev.target.checked;
+  settings.u = Date.now();
+  dirty["_settings"] = true;
+  persistSync();
+  scheduleSync();
+  saveSettings();
+});
+
+// ===================== Dr. Now =====================
+// Frei erfundene Sprüche im Stil von Dr. Nowzaradan (keine Original-Zitate)
+const DRNOW = {
+  up: [
+    "Interessant. Die Waage lügt nicht. Was hast du gegessen? Und sag jetzt nicht „nur Salat“.",
+    "Du sagst, du hältst dich an den Plan. Die Waage sagt was anderes. Einer von euch lügt – und die Waage hat keinen Grund dazu.",
+    "Das geht in die falsche Richtung. Abnehmen ist keine Zauberei: weniger essen, mehr bewegen.",
+    "Hat die Luft bei dir zu Hause Kalorien? Nein? Dann war es das Essen.",
+    "Ich bin nicht sauer. Ich bin nur nicht überrascht.",
+    "Du brauchst keine neue Diät. Du musst dich an die alte halten.",
+    "Ausreden verbrennen keine Kalorien.",
+    "Morgen ist ein neuer Tag. Aber nur, wenn du ihn anders angehst als den heutigen."
+  ],
+  down: [
+    "Sieh an, es geht also doch. Weiter so – aber werd nicht übermütig.",
+    "Gut. Genau das wollte ich sehen.",
+    "Die Zahl geht runter. Du machst deinen Job – ich bin zufrieden. Vorerst.",
+    "Sehr gut. Aber ein guter Tag ist keine Ausrede für ein schlechtes Wochenende.",
+    "Das gefällt mir. Bleib dran, dann müssen wir uns nicht streiten.",
+    "Siehst du? Kein Hexenwerk. Einfach dranbleiben.",
+    "Weiter so. Ich will beim nächsten Mal dasselbe sehen.",
+    "Okay, das ist ein Anfang. Jetzt beweis mir, dass es kein Zufall war."
+  ],
+  same: [
+    "Stillstand. Nicht schlechter, nicht besser. Das reicht mir nicht.",
+    "Die Waage bewegt sich nicht. Dann musst du dich eben bewegen.",
+    "Gleiches Gewicht wie beim letzten Mal. Immerhin brauchst du keine Ausrede – aber Fortschritt ist das auch keiner.",
+    "Halten ist okay. Aber wir sind hier nicht zum Halten."
+  ],
+  first: [
+    "Gut, dass du da bist. Ab jetzt zählt jede Zahl auf der Waage – und ich sehe alles.",
+    "Erster Eintrag. Merk dir diese Zahl. Wir sehen uns morgen wieder.",
+    "Willkommen. Ich mache dir keine Versprechen – die Arbeit machst du."
+  ]
+};
+
+function showDrNow(pool) {
+  const list = DRNOW[pool];
+  document.getElementById("drnow-quote").textContent = "„" + list[Math.floor(Math.random() * list.length)] + "“";
+  document.getElementById("drnow-overlay").classList.add("open");
+}
+function closeDrNow() { document.getElementById("drnow-overlay").classList.remove("open"); }
+document.getElementById("drnow-ok").addEventListener("click", closeDrNow);
+document.getElementById("drnow-overlay").addEventListener("click", (ev) => { if (ev.target.id === "drnow-overlay") closeDrNow(); });
+
 // ===================== Tabs & Toast =====================
 document.querySelectorAll(".tabbar button").forEach(btn => {
   btn.addEventListener("click", () => {
@@ -999,7 +1106,7 @@ async function syncNow() {
     const days = Object.keys(dirty);
     if (days.length) {
       const rows = days.map(day => {
-        if (day === "_settings") return { user_id: currentUser.id, day: day, data: { gender: settings.gender }, updated_at: settings.u || Date.now() };
+        if (day === "_settings") return { user_id: currentUser.id, day: day, data: { gender: settings.gender, drnow: settings.drnow !== false }, updated_at: settings.u || Date.now() };
         if (data[day]) {
           const copy = Object.assign({}, data[day]);
           const u = copy.u || Date.now();
