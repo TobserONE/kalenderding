@@ -39,6 +39,9 @@
   }
 }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+/* Basis-Schriftgröße wächst mit der Displaybreite: bis ~390px wie bisher 16px,
+   auf breiten Handys (z. B. Pixel Pro) bis 19px – alle rem-Größen skalieren mit */
+html { font-size: clamp(16px, 4.1vw, 19px); }
 html, body { height: 100%; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -63,11 +66,11 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
   padding: 6px 14px; cursor: pointer;
 }
 .weekdays {
-  display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px;
   text-align: center; font-size: 0.7rem; color: var(--text2);
   font-weight: 600; margin-bottom: 4px;
 }
-.grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
 .tile {
   background: var(--card); border-radius: 10px; min-height: 62px;
   padding: 4px 2px 3px; display: flex; flex-direction: column; align-items: center;
@@ -82,8 +85,8 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
 .tile .day { font-weight: 700; font-size: 0.78rem; }
 .tile .dot { width: 10px; height: 10px; border-radius: 50%; }
 .tile .dot.none { background: transparent; }
-.tile .w { font-size: 0.66rem; font-weight: 600; white-space: nowrap; }
-.tile .w .arrow { font-size: 0.55rem; }
+.tile .w { font-size: min(0.66rem, 2.5vw); font-weight: 600; white-space: nowrap; }
+.tile .w .arrow { font-size: 0.85em; }
 .tile .p-flag {
   position: absolute; top: 2px; right: 3px; font-size: 0.6rem;
 }
@@ -93,6 +96,12 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
 .legend {
   display: flex; flex-wrap: wrap; gap: 10px; padding: 14px 4px 0;
   font-size: 0.72rem; color: var(--text2);
+}
+/* Sehr schmale Displays: weniger Außenabstand, engeres Raster */
+@media (max-width: 359px) {
+  .view { padding-left: 8px; padding-right: 8px; }
+  .weekdays, .grid { gap: 3px; }
+  .tile { border-radius: 8px; padding-left: 1px; padding-right: 1px; }
 }
 .legend span { display: flex; align-items: center; gap: 4px; }
 .legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
@@ -172,7 +181,7 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
 .stat {
   background: var(--card); border-radius: 14px; padding: 12px 8px; text-align: center;
 }
-.stat .v { font-size: 1.15rem; font-weight: 700; }
+.stat .v { font-size: clamp(0.95rem, 4vw, 1.15rem); font-weight: 700; white-space: nowrap; }
 .stat .l { font-size: 0.65rem; color: var(--text2); margin-top: 3px; }
 .card {
   background: var(--card); border-radius: 14px; padding: 14px; margin-bottom: 14px;
