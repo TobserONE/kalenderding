@@ -25,6 +25,7 @@
   --tint-down: #dcf5e3;
   --tint-same: #e0efff;
   --period: #ff2d55;
+  --trend: #ff9500;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -36,6 +37,7 @@
     --tint-up: #4a2320;
     --tint-down: #1e3a28;
     --tint-same: #1d3350;
+    --trend: #ff9f0a;
   }
 }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -310,6 +312,7 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
   <div class="card">
     <h3>Gewichtsverlauf</h3>
     <div class="sub" id="w-sub">Rosa Balken = Periodentage</div>
+    <div class="sub" id="w-trend-sub" style="display:none;color:var(--trend)">Gestrichelte Linie = 7-Tage-Durchschnitt</div>
     <div class="range-btns" id="w-range">
       <button data-d="30" class="on">30 Tage</button>
       <button data-d="90">90 Tage</button>
@@ -686,9 +689,34 @@ function renderWeightChart() {
   }
   if (pts.length < 2) {
     el.innerHTML = '<div class="empty-hint">Noch zu wenige Gewichtsdaten in diesem Zeitraum.</div>';
+    document.getElementById("w-trend-sub").style.display = "none";
     return;
   }
-  let min = Math.min(...pts.map(p => p.w)), max = Math.max(...pts.map(p => p.w));
+
+  // 7-Tage-Durchschnitt: erst ab dem Tag, an dem das 7-Tage-Fenster komplett
+  // hinter dem ersten Gewichtseintrag liegt; mind. 2 Messwerte pro Fenster
+  const firstWKey = Object.keys(data).filter(k => typeof data[k].w === "number").sort()[0];
+  const firstW = dateOf(firstWKey);
+  const trend = [];
+  {
+    const td = new Date(start);
+    for (let i = 0; i < weightRange; i++) {
+      const winStart = new Date(td); winStart.setDate(winStart.getDate() - 6);
+      if (winStart >= firstW) {
+        const vals = [];
+        const wd = new Date(winStart);
+        for (let j = 0; j < 7; j++) {
+          const e = data[keyOf(wd)];
+          if (e && typeof e.w === "number") vals.push(e.w);
+          wd.setDate(wd.getDate() + 1);
+        }
+        if (vals.length >= 2) trend.push({ i, w: vals.reduce((a, b) => a + b, 0) / vals.length });
+      }
+      td.setDate(td.getDate() + 1);
+    }
+  }
+
+  let min = Math.min(...pts.map(p => p.w), ...trend.map(p => p.w)), max = Math.max(...pts.map(p => p.w), ...trend.map(p => p.w));
   if (max - min < 1) { min -= 0.5; max += 0.5; }
   const pad = (max - min) * 0.1;
   min -= pad; max += pad;
@@ -715,6 +743,16 @@ function renderWeightChart() {
     const lbl = dd.getDate() + "." + (dd.getMonth() + 1) + ".";
     s += '<text x="' + X(i) + '" y="' + (H - 6) + '" font-size="9" fill="' + axisColor() + '" text-anchor="middle">' + lbl + "</text>";
   });
+  // 7-Tage-Trend (gestrichelt); Lücken ohne genug Messwerte unterbrechen die Linie
+  if (trend.length >= 2) {
+    let tp = "", prevI = null;
+    trend.forEach(p => {
+      tp += (prevI !== null && p.i - prevI === 1 ? "L" : "M") + X(p.i).toFixed(1) + " " + Y(p.w).toFixed(1) + " ";
+      prevI = p.i;
+    });
+    s += '<path d="' + tp.trim() + '" fill="none" stroke="var(--trend)" stroke-width="2" stroke-dasharray="5 4" stroke-linejoin="round" stroke-linecap="round"/>';
+  }
+  document.getElementById("w-trend-sub").style.display = trend.length >= 2 ? "" : "none";
   // Linie
   const path = pts.map((p, idx) => (idx === 0 ? "M" : "L") + X(p.i).toFixed(1) + " " + Y(p.w).toFixed(1)).join(" ");
   s += '<path d="' + path + '" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
@@ -959,35 +997,37 @@ document.getElementById("set-drnow").addEventListener("change", (ev) => {
 // Frei erfundene Sprüche im Stil von Dr. Nowzaradan (keine Original-Zitate)
 const DRNOW = {
   up: [
-    "Interessant. Die Waage lügt nicht. Was hast du gegessen? Und sag jetzt nicht „nur Salat“.",
-    "Du sagst, du hältst dich an den Plan. Die Waage sagt was anderes. Einer von euch lügt – und die Waage hat keinen Grund dazu.",
-    "Das geht in die falsche Richtung. Abnehmen ist keine Zauberei: weniger essen, mehr bewegen.",
-    "Hat die Luft bei dir zu Hause Kalorien? Nein? Dann war es das Essen.",
-    "Ich bin nicht sauer. Ich bin nur nicht überrascht.",
-    "Du brauchst keine neue Diät. Du musst dich an die alte halten.",
-    "Ausreden verbrennen keine Kalorien.",
-    "Morgen ist ein neuer Tag. Aber nur, wenn du ihn anders angehst als den heutigen."
+    "Die Waage lügt nicht. Menschen lügen. Die Waage nicht.",
+    "Was hast du gegessen? Und bevor du antwortest: „Fast nichts“ hat erstaunlich viele Kalorien.",
+    "Das Gewicht kommt nicht aus der Luft. Es kommt aus dem Kühlschrank.",
+    "Ich bin nicht wütend. Ich bin Arzt. Aber die Zahl da – die ist ein Problem.",
+    "Du brauchst keine neue Diät. Du musst aufhören, die alte zu ignorieren.",
+    "Ausreden haben null Kalorien. Sie sind das Einzige, wovon du mehr nehmen solltest.",
+    "It is very simple: eat less. Nobody ever gained weight from eating less.",
+    "Ich habe das alles schon gehört. Der Stoffwechsel, die Knochen, das Wasser. Es war das Essen.",
+    "Noch so eine Woche und wir müssen reden. Ernsthaft reden.",
+    "Du sagst, du gibst dein Bestes. Dann habe ich schlechte Nachrichten über dein Bestes."
   ],
   down: [
-    "Sieh an, es geht also doch. Weiter so – aber werd nicht übermütig.",
-    "Gut. Genau das wollte ich sehen.",
-    "Die Zahl geht runter. Du machst deinen Job – ich bin zufrieden. Vorerst.",
-    "Sehr gut. Aber ein guter Tag ist keine Ausrede für ein schlechtes Wochenende.",
-    "Das gefällt mir. Bleib dran, dann müssen wir uns nicht streiten.",
-    "Siehst du? Kein Hexenwerk. Einfach dranbleiben.",
-    "Weiter so. Ich will beim nächsten Mal dasselbe sehen.",
-    "Okay, das ist ein Anfang. Jetzt beweis mir, dass es kein Zufall war."
+    "Sieh an. Wenn du machst, was du sollst, funktioniert es. Wer hätte das gedacht. Ich. Ich hätte das gedacht.",
+    "Gut. Das ist die richtige Richtung. Bleib einfach langweilig und mach exakt so weiter.",
+    "Die Zahl geht runter. Ich sage nicht oft „gut gemacht“. Gut gemacht.",
+    "Okay. Ich bin zufrieden. Das passiert selten. Genieß den Moment.",
+    "That is what I want to see. Keep going.",
+    "Runter ist runter. Aber feier das nicht mit Kuchen. Ich kenne meine Leute.",
+    "Weiter so. Und denk dran: Das Wochenende zählt auch. Das Wochenende zählt immer.",
+    "Nicht schlecht. Jetzt beweis mir, dass das Können war und kein Glück."
   ],
   same: [
-    "Stillstand. Nicht schlechter, nicht besser. Das reicht mir nicht.",
-    "Die Waage bewegt sich nicht. Dann musst du dich eben bewegen.",
-    "Gleiches Gewicht wie beim letzten Mal. Immerhin brauchst du keine Ausrede – aber Fortschritt ist das auch keiner.",
-    "Halten ist okay. Aber wir sind hier nicht zum Halten."
+    "Exakt gleich. Weißt du, was sich nicht bewegt? Dinge, die nichts tun.",
+    "Stillstand. Die gute Nachricht: keine Zunahme. Die schlechte: Das war schon die gute Nachricht.",
+    "Die Waage steht still. Du offenbar auch. Beweg dich.",
+    "Gleiches Gewicht. Ich sage nicht, dass das schlecht ist. Ich sage nur, dass es nicht gut ist."
   ],
   first: [
-    "Gut, dass du da bist. Ab jetzt zählt jede Zahl auf der Waage – und ich sehe alles.",
-    "Erster Eintrag. Merk dir diese Zahl. Wir sehen uns morgen wieder.",
-    "Willkommen. Ich mache dir keine Versprechen – die Arbeit machst du."
+    "Gut, dass du da bist. Regel Nummer eins: Die Waage hat immer recht. Regel Nummer zwei: siehe Regel eins.",
+    "Erster Eintrag. Merk dir die Zahl. Ich merke sie mir auch.",
+    "Willkommen. Ich verspreche dir nichts. Aber wenn du tust, was zu tun ist, funktioniert es. Immer."
   ]
 };
 
