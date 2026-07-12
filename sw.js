@@ -1,4 +1,4 @@
-const CACHE = "mein-tracker-v8";
+const CACHE = "mein-tracker-v9";
 const FILES = ["./", "./index.html", "./manifest.json", "./supabase.js", "./icon-180.png", "./icon-512.png"];
 
 self.addEventListener("install", (e) => {

@@ -169,7 +169,6 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
   background: var(--bg); color: var(--text); font-size: 0.95rem; cursor: pointer;
 }
 .seg button.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
-.stats.two { grid-template-columns: repeat(2, 1fr); }
 .sheet-btns { display: flex; gap: 10px; margin-top: 6px; }
 .sheet-btns button {
   flex: 1; padding: 13px 0; border-radius: 12px; border: none;
@@ -179,11 +178,16 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
 .btn-del { background: var(--bg); color: var(--red); }
 
 /* ---------- Diagramme ---------- */
-.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+.stats.no-cycle { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 479px) {
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .stats.no-cycle { grid-template-columns: repeat(3, 1fr); }
+}
 .stat {
   background: var(--card); border-radius: 14px; padding: 12px 8px; text-align: center;
 }
-.stat .v { font-size: clamp(0.95rem, 4vw, 1.15rem); font-weight: 700; white-space: nowrap; }
+.stat .v { font-size: clamp(0.9rem, 3.6vw, 1.15rem); font-weight: 700; white-space: nowrap; }
 .stat .l { font-size: 0.65rem; color: var(--text2); margin-top: 3px; }
 .card {
   background: var(--card); border-radius: 14px; padding: 14px; margin-bottom: 14px;
@@ -305,6 +309,7 @@ h1 { font-size: 1.5rem; padding: 8px 4px 4px; }
   <h1>Diagramme</h1>
   <div class="stats">
     <div class="stat"><div class="v" id="st-weight">–</div><div class="l">Aktuelles Gewicht</div></div>
+    <div class="stat"><div class="v" id="st-trend">–</div><div class="l">Ø 7 Tage</div></div>
     <div class="stat"><div class="v" id="st-delta">–</div><div class="l">Δ 7 Tage</div></div>
     <div class="stat" id="st-cycle-box"><div class="v" id="st-cycle">–</div><div class="l">Ø Zyklus</div></div>
   </div>
@@ -905,6 +910,25 @@ function renderStats() {
     } else { stD.textContent = "–"; }
   } else { stW.textContent = "–"; stD.textContent = "–"; }
 
+  // aktueller 7-Tage-Durchschnitt: Fenster heute-6 … heute, gleiche Regeln wie die Trendlinie
+  const stT = document.getElementById("st-trend");
+  const trendVals = [];
+  if (wKeys.length) {
+    const firstW = dateOf(wKeys[0]);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const winStart = new Date(today); winStart.setDate(winStart.getDate() - 6);
+    if (winStart >= firstW) {
+      const wd = new Date(winStart);
+      for (let j = 0; j < 7; j++) {
+        const e = data[keyOf(wd)];
+        if (e && typeof e.w === "number") trendVals.push(e.w);
+        wd.setDate(wd.getDate() + 1);
+      }
+    }
+  }
+  stT.textContent = trendVals.length >= 2
+    ? fmtW(trendVals.reduce((a, b) => a + b, 0) / trendVals.length) + " kg" : "–";
+
   const starts = getPeriodStarts();
   const lens = [];
   for (let i = 1; i < starts.length; i++) {
@@ -920,7 +944,7 @@ function renderCharts() {
   document.getElementById("card-cycle").style.display = en ? "" : "none";
   document.getElementById("st-cycle-box").style.display = en ? "" : "none";
   document.getElementById("w-sub").style.display = en ? "" : "none";
-  document.querySelector(".stats").classList.toggle("two", !en);
+  document.querySelector(".stats").classList.toggle("no-cycle", !en);
   renderStats();
   renderWeightChart();
   renderActivityChart();
